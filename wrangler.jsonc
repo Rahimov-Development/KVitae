@@ -8,6 +8,7 @@
   "routes": [
     {
       "pattern": "cv.rahimov.dev",
+      "zone_id": "707a2e43b0a76b0724b235419eeb8f6a",
       "custom_domain": true
     }
   ],

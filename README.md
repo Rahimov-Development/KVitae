@@ -97,11 +97,11 @@ On every push to `main`, `.github/workflows/deploy.yml` deploys the Worker with 
 
 The current `CLOUDFLARE_API_TOKEN` is **account-level only** (Workers Scripts / KV / R2 Edit, Account Settings Read) and has **no zone permissions**. That is enough to redeploy Worker code, but **not** enough to add or change a Custom Domain.
 
-Attaching `cv.rahimov.dev` via `"custom_domain": true` is a Routes/Custom Domains change. Official Cloudflare docs require zone-scoped permission on **rahimov.dev** in addition to account-level Workers Editor:
+Attaching `cv.rahimov.dev` via `"custom_domain": true` is a Routes/Custom Domains change. Official Cloudflare docs require zone-scoped permission on **rahimov.dev** in addition to account-level Workers Editor. `wrangler.jsonc` pins `zone_id` `707a2e43b0a76b0724b235419eeb8f6a` (rahimov.dev; not a secret) so Wrangler 4.117 does **not** call `GET /zones` and **Zone Read is not required**.
 
 | Secret | Value |
 |--------|--------|
-| `CLOUDFLARE_API_TOKEN` | Account: **Workers Scripts Edit** (Editor), **Account Settings Read**, **Workers KV Storage Edit**, **Workers R2 Storage Edit**. Zone (`rahimov.dev` only): **Workers Routes Write** (token UI often labels this **Workers Routes Edit**). |
+| `CLOUDFLARE_API_TOKEN` | Account: **Workers Scripts Edit** (Editor), **Account Settings Read**, **Workers KV Storage Edit**, **Workers R2 Storage Edit**. Zone (`rahimov.dev` only): **Workers Routes Write** (token UI often labels this **Workers Routes Edit**). No Zone Read. |
 | `CLOUDFLARE_ACCOUNT_ID` | `b21935a261bd227400d32c634a32fc20` |
 
 Sources:
@@ -109,9 +109,12 @@ Sources:
 - [Workers roles — Routes and Custom Domains](https://developers.cloudflare.com/workers/authorization/workers/#routes-and-custom-domains): add/update/remove Routes or Custom Domains needs `Editor` on the Worker **and** `Zone > Workers Routes > Write` on every affected zone.
 - [Roles and permissions](https://developers.cloudflare.com/workers/authorization/): `wrangler deploy` that changes Routes or Custom Domains needs Editor plus Workers Routes Write.
 - [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/): Cloudflare creates the DNS record and issues an Advanced Certificate automatically. Official docs do **not** list Zone DNS Edit, Zone Read, or SSL and Certificates as required token permissions for this attach.
+- [Wrangler routes](https://developers.cloudflare.com/workers/wrangler/configuration/#types-of-routes): `zone_id` names the zone without a `zone_name` lookup (`zone_name` is the form that needs broader token scope).
 - [Edit Cloudflare Workers token template](https://developers.cloudflare.com/fundamentals/api/reference/template/): includes Zone **Workers Routes Write** plus the account Workers/KV/R2 permissions.
 
 Scope the zone permission to **rahimov.dev only**. Do not grant all zones.
+
+The deploy job uses `environment: production`. Create that GitHub Environment (main only, required reviewer) before relying on its protection rules. Environment secrets override repository secrets of the same name; if a name is not set on the environment, the repository secret is still used ([Secrets reference](https://docs.github.com/en/actions/reference/security/secrets)).
 
 Create a token: [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token** → use the **Edit Cloudflare Workers** template, then restrict **Zone Resources** to `rahimov.dev`.
 
