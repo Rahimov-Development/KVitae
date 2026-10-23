@@ -3,6 +3,15 @@
   "name": "cv-manager",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-31",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "cv.rahimov.dev",
+      "zone_id": "707a2e43b0a76b0724b235419eeb8f6a",
+      "custom_domain": true
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "CV_STORAGE",

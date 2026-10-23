@@ -2,6 +2,8 @@
 
 Serverless CV backend on Cloudflare Workers with KV (JSON data) and R2 (HTML/assets).
 
+**Public URL:** [https://cv.rahimov.dev](https://cv.rahimov.dev) — public by design, no Cloudflare Access. Reads (`GET /`, `GET /api/cv`, `GET /media/:filename`) are unauthenticated. Writes (`PUT /api/cv`, `PUT /media/:filename`) still require `Authorization: Bearer AUTH_SECRET` only.
+
 **Author:** [Arthur Rahimov](https://github.com/ragmon)  
 **License:** [MIT](./LICENSE)
 
@@ -27,9 +29,9 @@ Secrets the PocketBase side needs (its `.env`, see that repo's `.env.example`):
 
 | Variable | Value |
 |----------|-------|
-| `KVITAE_URL` | `https://cv-manager.arthur-ragimov.workers.dev` |
+| `KVITAE_URL` | `https://cv.rahimov.dev` — CloudOps must switch this **right after** the Worker deploy that attaches the custom domain. The previous `https://cv-manager.arthur-ragimov.workers.dev` URL is disabled (`workers_dev: false`). |
 | `KVITAE_AUTH_SECRET` | This Worker's `AUTH_SECRET` |
-| `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | Access service token (required while `workers.dev` is behind Cloudflare Access) |
+| `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | **Not needed** for `cv.rahimov.dev` (no Access app on that hostname). Sending the headers is harmless; remove them from custom-pocketbase config later in a **separate** change. |
 
 Publish from the PocketBase repo (credentials via env or that repo’s `.env`, never hardcoded):
 
@@ -93,12 +95,28 @@ On every push to `main`, `.github/workflows/deploy.yml` deploys the Worker with 
 
 ### Required repository secrets
 
+The current `CLOUDFLARE_API_TOKEN` is **account-level only** (Workers Scripts / KV / R2 Edit, Account Settings Read) and has **no zone permissions**. That is enough to redeploy Worker code, but **not** enough to add or change a Custom Domain.
+
+Attaching `cv.rahimov.dev` via `"custom_domain": true` is a Routes/Custom Domains change. Official Cloudflare docs require zone-scoped permission on **rahimov.dev** in addition to account-level Workers Editor. `wrangler.jsonc` pins `zone_id` `707a2e43b0a76b0724b235419eeb8f6a` (rahimov.dev; not a secret) so Wrangler 4.117 does **not** call `GET /zones` and **Zone Read is not required**.
+
 | Secret | Value |
 |--------|--------|
-| `CLOUDFLARE_API_TOKEN` | API token with **Workers Scripts Edit**, **Account Settings Read**, **Workers KV Storage Edit**, **Workers R2 Storage Edit** |
+| `CLOUDFLARE_API_TOKEN` | Account: **Workers Scripts Edit** (Editor), **Account Settings Read**, **Workers KV Storage Edit**, **Workers R2 Storage Edit**. Zone (`rahimov.dev` only): **Workers Routes Write** (token UI often labels this **Workers Routes Edit**). No Zone Read. |
 | `CLOUDFLARE_ACCOUNT_ID` | `b21935a261bd227400d32c634a32fc20` |
 
-Create a token: [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token** → use the **Edit Cloudflare Workers** template (or custom with the permissions above).
+Sources:
+
+- [Workers roles — Routes and Custom Domains](https://developers.cloudflare.com/workers/authorization/workers/#routes-and-custom-domains): add/update/remove Routes or Custom Domains needs `Editor` on the Worker **and** `Zone > Workers Routes > Write` on every affected zone.
+- [Roles and permissions](https://developers.cloudflare.com/workers/authorization/): `wrangler deploy` that changes Routes or Custom Domains needs Editor plus Workers Routes Write.
+- [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/): Cloudflare creates the DNS record and issues an Advanced Certificate automatically. Official docs do **not** list Zone DNS Edit, Zone Read, or SSL and Certificates as required token permissions for this attach.
+- [Wrangler routes](https://developers.cloudflare.com/workers/wrangler/configuration/#types-of-routes): `zone_id` names the zone without a `zone_name` lookup (`zone_name` is the form that needs broader token scope).
+- [Edit Cloudflare Workers token template](https://developers.cloudflare.com/fundamentals/api/reference/template/): includes Zone **Workers Routes Write** plus the account Workers/KV/R2 permissions.
+
+Scope the zone permission to **rahimov.dev only**. Do not grant all zones.
+
+The deploy job uses `environment: production`. Create that GitHub Environment (main only, required reviewer) before relying on its protection rules. Environment secrets override repository secrets of the same name; if a name is not set on the environment, the repository secret is still used ([Secrets reference](https://docs.github.com/en/actions/reference/security/secrets)).
+
+Create a token: [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token** → use the **Edit Cloudflare Workers** template, then restrict **Zone Resources** to `rahimov.dev`.
 
 Then set secrets:
 
@@ -109,45 +127,20 @@ gh secret set CLOUDFLARE_ACCOUNT_ID --body "b21935a261bd227400d32c634a32fc20"
 
 Manual deploy from Actions: **Actions** → **Deploy** → **Run workflow**.
 
-## Cloudflare Access (private browsing)
+## Authentication
 
-Protect `workers.dev` so only your email can open the CV in a browser.
+`https://cv.rahimov.dev` is **public by design**. There is no Cloudflare Access application on that hostname. `workers.dev` and preview URLs are disabled in `wrangler.jsonc` (`workers_dev: false`, `preview_urls: false`).
 
-### 1. Enable Access on the Worker
-
-1. Open [cv-manager → Settings → Domains & Routes](https://dash.cloudflare.com/b21935a261bd227400d32c634a32fc20/workers/services/view/cv-manager/production/settings)
-2. On the `workers.dev` row, click **Enable Cloudflare Access**
-3. Click **Manage Cloudflare Access** and allow only your email (e.g. `arthur.ragimov@gmail.com`)
-4. Copy **Application Audience (AUD)** and **Team domain** from the Access UI
-
-### 2. Set Worker vars (then redeploy)
+Writes still need the Worker Bearer secret only:
 
 ```bash
-npx wrangler secret put POLICY_AUD   # optional: can also be a plain var
-# or add to wrangler.jsonc under "vars":
-```
-
-```jsonc
-"vars": {
-  "POLICY_AUD": "<AUD from Access>",
-  "TEAM_DOMAIN": "https://<your-team>.cloudflareaccess.com"
-}
-```
-
-With both set, the Worker also verifies the Access JWT (`Cf-Access-Jwt-Assertion`).
-
-### 3. API / curl after Access is on
-
-Browser login does not apply to `curl`. Create a [Service Token](https://one.dash.cloudflare.com/) under **Access → Service Auth**, attach it to the Access policy, then:
-
-```bash
-curl -X PUT https://cv-manager.arthur-ragimov.workers.dev/api/cv \
-  -H "CF-Access-Client-Id: YOUR_SERVICE_TOKEN_ID" \
-  -H "CF-Access-Client-Secret: YOUR_SERVICE_TOKEN_SECRET" \
+curl -X PUT https://cv.rahimov.dev/api/cv \
   -H "Authorization: Bearer YOUR_AUTH_SECRET" \
   -H "Content-Type: application/json" \
   --data-binary @cv.json
 ```
+
+The Worker still contains an optional Access-JWT check (`POLICY_AUD` + `TEAM_DOMAIN`). Those are **not** set in production and must stay unset: with both set, unauthenticated public reads would 403. Do not enable that path for `cv.rahimov.dev`.
 
 ## CV content
 
@@ -165,12 +158,12 @@ cp cv.example.json cv.json
 Upload the template and JSON to the live Worker:
 
 ```bash
-curl -X PUT https://your-worker-url.workers.dev/media/index.html \
+curl -X PUT https://cv.rahimov.dev/media/index.html \
   -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
   -H "Content-Type: text/html" \
   --data-binary @templates/index.html
 
-curl -X PUT https://your-worker-url.workers.dev/api/cv \
+curl -X PUT https://cv.rahimov.dev/api/cv \
   -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
   -H "Content-Type: application/json" \
   --data-binary @cv.json
@@ -275,7 +268,7 @@ Quick override without editing JSON (share links):
 Upload template:
 
 ```bash
-curl -X PUT https://your-worker-url.workers.dev/media/index.html \
+curl -X PUT https://cv.rahimov.dev/media/index.html \
   -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
   -H "Content-Type: text/html" \
   --data-binary @index.html
@@ -284,7 +277,7 @@ curl -X PUT https://your-worker-url.workers.dev/media/index.html \
 Update CV JSON:
 
 ```bash
-curl -X PUT https://your-worker-url.workers.dev/api/cv \
+curl -X PUT https://cv.rahimov.dev/api/cv \
   -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Your Name", "title": "Full-Stack Developer", "skills": ["Vue.js", "NestJS", "Hono"]}'
