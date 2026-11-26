@@ -571,7 +571,9 @@ footer.doc-footer {
   * { animation: none !important; transition: none !important; }
   .toolbar { display: none !important; }
 
-  @page { size: A4; margin: 0; }
+  /* @page margin applies on every sheet. Padding on .sheet only insets the
+     first and last edges of the box, so later PDF pages would be edgeless. */
+  @page { size: A4; margin: 10mm 12mm; }
   html, body {
     background: var(--bg-elevated) !important;
     margin: 0;
@@ -587,8 +589,7 @@ footer.doc-footer {
     box-shadow: none;
     margin: 0;
     max-width: none;
-    min-height: 100vh;
-    padding: 10mm 12mm 10mm;
+    padding: 0;
     background: var(--bg-elevated);
   }
 
