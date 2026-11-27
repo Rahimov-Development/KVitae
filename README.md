@@ -176,6 +176,8 @@ curl -X PUT https://your-worker-url.workers.dev/api/cv \
   --data-binary @cv.json
 ```
 
+The public page has a light/dark theme toggle (persisted in `localStorage`) and **PDF · Light** / **PDF · Dark** buttons that print the live snapshot with branded print CSS. Fonts are self-hosted; upload the three `templates/fonts/*.woff2` files to R2 as documented in [docs/DEPLOY-PLAN-theme-toggle.md](docs/DEPLOY-PLAN-theme-toggle.md). Local preview: `node scripts/preview.mjs`.
+
 ### GDPR: reference contacts
 
 In `cv.json`:
