@@ -61,6 +61,21 @@ const withAuth = async (c: Context<{ Bindings: Bindings }>, next: Next) => {
   return auth(c, next);
 };
 
+const ROBOTS_TAG = 'noindex, nofollow';
+
+/** Clone a Response and set X-Robots-Tag so crawlers never index this host. */
+function withRobotsTag(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('X-Robots-Tag', ROBOTS_TAG);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /', 200, { 'Content-Type': 'text/plain' }));
+
 app.get('/', async (c) => {
   let htmlStr = '';
 
@@ -75,6 +90,7 @@ app.get('/', async (c) => {
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="robots" content="noindex, nofollow">
           <title>My CV</title>
       </head>
       <body>
@@ -183,4 +199,19 @@ app.put('/media/:filename', withAuth, async (c) => {
   });
 });
 
-export default app;
+/**
+ * Central fetch wrapper: every response (HTML, JSON, media, robots.txt, 404s,
+ * auth errors, and uncaught exceptions) gets X-Robots-Tag. Do not add routes
+ * that bypass this export.
+ */
+const worker = {
+  async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
+    try {
+      return withRobotsTag(await app.fetch(request, env, ctx));
+    } catch {
+      return withRobotsTag(new Response('Internal Server Error', { status: 500 }));
+    }
+  },
+};
+
+export default worker;

@@ -264,9 +264,12 @@ Quick override without editing JSON (share links):
 
 ## API
 
+Every Worker response includes `X-Robots-Tag: noindex, nofollow` (see [docs/noindex-check.md](docs/noindex-check.md)). `cv.rahimov.dev` must not be indexed.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/` | No | Serves HTML from R2 with CV JSON injected as `window.__CV_DATA__` |
+| `GET` | `/robots.txt` | No | `User-agent: *` / `Disallow: /` (`text/plain`) |
 | `GET` | `/api/cv` | No | Returns CV JSON from KV |
 | `PUT` | `/api/cv` | Bearer | Updates CV JSON in KV |
 | `GET` | `/media/:filename` | No | Serves a file from R2 |
